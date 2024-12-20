@@ -4,3 +4,4 @@ matplotlib
 plotly
 numpy
 xmltodict
+seaborn

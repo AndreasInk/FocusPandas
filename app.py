@@ -4,6 +4,7 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import xml.etree.ElementTree as ET
 from pydantic import BaseModel
+import seaborn as sns
 
 class DataFrames(BaseModel):
     screen_df: pd.DataFrame
@@ -240,20 +241,29 @@ def screen_time_analysis(screen_df):
 
     # Display Screen Time DataFrame
     st.subheader('Screen Time Data')
-    st.write(screen_df)
 
-    # Basic Statistics
-    st.subheader('Basic Statistics')
-    st.write(screen_df.describe())
+     # Group by date and category
+    category_usage = screen_df.groupby(['date', 'category'])['usage'].sum().reset_index()
+    category_usage['usage_hours'] = category_usage['usage'] / 3600
 
-    # Total usage per app
-    st.subheader('Total Usage per App')
+    # Pivot the DataFrame for easier plotting
+    category_pivot = category_usage.pivot(index='date', columns='category', values='usage_hours').fillna(0)
+
+    # Plot stacked bar chart
+    fig, ax = plt.subplots(figsize=(12, 6))
+    category_pivot.plot(kind='bar', stacked=True, ax=ax)
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Usage (hours)')
+    ax.set_title('Daily Usage by App Category')
+    plt.xticks(rotation=45)
+    st.pyplot(fig)
+
+    
     total_usage_per_app = screen_df.groupby('app')['usage'].sum().reset_index()
     total_usage_per_app = total_usage_per_app.sort_values(by='usage', ascending=False)
-    st.write(total_usage_per_app)
 
     # Limit to top 10 apps by usage
-    top_apps = total_usage_per_app.head(10)['app'].tolist()
+    top_apps = total_usage_per_app.head(4)['app'].tolist()
     screen_df_top = screen_df[screen_df['app'].isin(top_apps)]
 
     # Aggregate usage by day for better readability
@@ -283,6 +293,40 @@ def screen_time_analysis(screen_df):
     ax2.set_title('Peak Usage Times')
     ax2.grid(True)
     st.pyplot(fig2)
+
+    st.title('Usage Patterns Over Time')
+
+    # Group by hour and category
+    hourly_usage = screen_df.groupby(['hour', 'category'])['usage'].sum().reset_index()
+    hourly_usage['usage_hours'] = hourly_usage['usage'] / 3600
+
+    # Pivot for heatmap
+    heatmap_data = hourly_usage.pivot(index='hour', columns='category', values='usage_hours').fillna(0)
+
+    # Plot heatmap
+    fig, ax = plt.subplots(figsize=(12, 8))
+    sns.heatmap(heatmap_data, annot=True, fmt=".1f", cmap='YlGnBu', ax=ax)
+    ax.set_title('Hourly Usage Heatmap by Category')
+    st.pyplot(fig)
+    
+
+     # Total usage per app
+    with st.expander(label="Data"):
+
+        # Basic Statistics
+        st.subheader('Basic Statistics')
+        st.write(screen_df.describe())
+
+        st.subheader('Daily Usage by Category')
+        st.write(category_pivot)
+
+        st.subheader('Total Usage per App')
+        
+        st.write(total_usage_per_app)
+
+
+        st.subheader('Peak Usage Times')
+        st.write(heatmap_data)
 
     # Summary
     st.subheader('Summary of Analysis')
@@ -362,42 +406,40 @@ def heart_rate_analysis(heart_rate_df, screen_df):
 
 @st.cache_data
 def sleep_analysis(sleep_df, screen_df, heart_rate_df, screen_grouped):
+    """
+    Analyze sleep data in relation to screen time and heart rate, including daily sleep patterns,
+    correlations with screen time, and hourly patterns.
+    """
     # Calculate sleep duration in hours
     sleep_df['duration'] = (sleep_df['endDate'] - sleep_df['startDate']).dt.total_seconds() / 3600
 
-    # Group sleep data by night
-    sleep_df['date'] = sleep_df['startDate'].dt.date
+    # Adjust sleep data to the next day to better align with daily cycles
+    sleep_df['date'] = sleep_df['startDate'].dt.date + pd.Timedelta(days=1)
+
+    # Group sleep data by date
     sleep_grouped = sleep_df.groupby('date').agg({'duration': 'sum'}).reset_index()
 
-    # Adjust sleep data to the next day
-    sleep_df['date'] = sleep_df['startDate'].dt.date
-    sleep_df['date'] = sleep_df['date'] + pd.Timedelta(days=1)
-    sleep_grouped = sleep_df.groupby('date').agg({'duration': 'sum'}).reset_index()
-
-    # Group screen time usage by hour of the day
+    # Group screen time usage by hour
     screen_df['hour'] = screen_df['start_time'].dt.hour
     hourly_screen_usage = screen_df.groupby('hour')['usage'].sum().reset_index()
     hourly_screen_usage['usage_hours'] = hourly_screen_usage['usage'] / 3600
 
-    # Group heart rate by hour of the day
+    # Group heart rate data by hour
     heart_rate_df['hour'] = heart_rate_df['startDate'].dt.hour
     hourly_heart_rate = heart_rate_df.groupby('hour')['value'].mean().reset_index()
 
+    # Display comprehensive analysis
     st.title('Comprehensive Sleep Data Analysis')
 
-    # Display Sleep DataFrame
-    st.subheader('Sleep Data')
-    st.write(sleep_df)
-
-    # Sleep duration over time
+    # Plot sleep duration over time
     st.subheader('Sleep Duration Over Time')
     fig1, ax1 = plt.subplots(figsize=(10, 6))
     ax1.plot(sleep_grouped['date'], sleep_grouped['duration'], marker='o')
     ax1.set_xlabel('Date')
     ax1.set_ylabel('Sleep Duration (hours)')
     ax1.set_title('Sleep Duration Over Time')
-    plt.xticks(rotation=45)
     ax1.grid(True)
+    plt.xticks(rotation=45)
     st.pyplot(fig1)
 
     # Correlation analysis with screen time
@@ -406,36 +448,59 @@ def sleep_analysis(sleep_df, screen_df, heart_rate_df, screen_grouped):
     correlation_sleep = merged_sleep_df[['usage', 'duration']].corr()
     st.write(correlation_sleep)
 
-    # Scatter plot for sleep correlation
+    # Scatter plot for sleep vs. screen time usage
+    st.subheader('Sleep Duration vs Screen Time Usage')
     fig2, ax2 = plt.subplots(figsize=(10, 6))
-    ax2.scatter(merged_sleep_df['duration'], merged_sleep_df['usage'])
+    ax2.scatter(merged_sleep_df['duration'], merged_sleep_df['usage'], color='purple', alpha=0.7)
     ax2.set_xlabel('Sleep Duration (hours)')
     ax2.set_ylabel('Screen Time Usage (seconds)')
     ax2.set_title('Sleep Duration vs Screen Time Usage')
+    ax2.grid(True)
     st.pyplot(fig2)
+
+    # Heatmap: Hourly sleep vs. screen time
+    st.subheader('Hourly Sleep vs. Screen Time Heatmap')
+
+    # Ensure 'usage_hours' column is numeric and fill missing values
+    hourly_screen_usage['usage_hours'] = pd.to_numeric(hourly_screen_usage['usage_hours'], errors='coerce').fillna(0)
+
+    # Create the pivot table for the heatmap
+    heatmap_data = hourly_screen_usage.pivot_table(values='usage_hours', index='hour', aggfunc='sum')
+
+    # Plot the heatmap
+    fig3, ax3 = plt.subplots(figsize=(10, 6))
+    sns.heatmap(heatmap_data, cmap='Blues', annot=True, fmt='.1f', ax=ax3)
+
+    ax3.set_title("Hourly Sleep vs. Screen Time Usage")
+    st.pyplot(fig3)
 
     # Overlay heart rate and screen time usage throughout the day
     st.subheader('Hourly Heart Rate and Screen Time Usage')
-    fig3, ax3 = plt.subplots(figsize=(10, 6))
-    
+    fig4, ax4 = plt.subplots(figsize=(10, 6))
+
     # Bar plot for screen time usage
-    ax3.bar(hourly_screen_usage['hour'], hourly_screen_usage['usage_hours'], width=0.8, align='center', alpha=0.6, label='Screen Time Usage (hours)', color='blue')
-    ax3.set_xlabel('Hour of the Day')
-    ax3.set_ylabel('Screen Time Usage (hours)', color='blue')
-    ax3.tick_params(axis='y', labelcolor='blue')
-    ax3.legend(loc='upper left')
+    ax4.bar(hourly_screen_usage['hour'], hourly_screen_usage['usage_hours'], color='blue', alpha=0.6, label='Screen Time Usage (hours)')
+    ax4.set_xlabel('Hour of the Day')
+    ax4.set_ylabel('Screen Time Usage (hours)', color='blue')
+    ax4.tick_params(axis='y', labelcolor='blue')
+    ax4.legend(loc='upper left')
 
-    # Scatter plot for heart rate
-    ax4 = ax3.twinx()
-    ax4.plot(hourly_heart_rate['hour'], hourly_heart_rate['value'], color='red', marker='o', linestyle='-', label='Heart Rate (count/min)')
-    ax4.set_ylabel('Heart Rate (count/min)', color='red')
-    ax4.tick_params(axis='y', labelcolor='red')
-    ax4.legend(loc='upper right')
+    # Line plot for heart rate
+    ax5 = ax4.twinx()
+    ax5.plot(hourly_heart_rate['hour'], hourly_heart_rate['value'], color='red', marker='o', linestyle='-', label='Heart Rate (count/min)')
+    ax5.set_ylabel('Heart Rate (count/min)', color='red')
+    ax5.tick_params(axis='y', labelcolor='red')
+    ax5.legend(loc='upper right')
 
-    plt.title('Heart Rate and Screen Time Usage by Hour of the Day')
-    fig3.tight_layout()
-    ax3.grid(True)
-    st.pyplot(fig3)
+    ax4.set_title('Heart Rate and Screen Time Usage by Hour of the Day')
+    ax4.grid(True)
+    fig4.tight_layout()
+    st.pyplot(fig4)
+
+    # Display Sleep DataFrame
+    st.subheader('Sleep Data')
+    st.write(sleep_df)
+
 
 @st.cache_data
 def additional_insights(screen_df, audio_exposure_df):
@@ -549,7 +614,6 @@ def productivity_metrics(screen_df):
     total_daily_usage = screen_df.groupby('date')['usage'].sum().reset_index()
     total_daily_usage['usage_hours'] = total_daily_usage['usage'] / 3600
 
-    st.write(screen_df.head())
     # Productive usage per day
     productive_daily_usage = screen_df[screen_df['category'] == 'Productive'].groupby('date')['usage'].sum().reset_index()
     productive_daily_usage['usage_hours'] = productive_daily_usage['usage'] / 3600
@@ -560,13 +624,65 @@ def productivity_metrics(screen_df):
     # Calculate productivity ratio
     daily_productivity['productivity_ratio'] = (daily_productivity['usage_hours_productive'] / daily_productivity['usage_hours_total']) * 100
 
-    # Display metrics
-    st.subheader('Daily Productivity Metrics')
-    st.write(daily_productivity)
-
     # Calculate averages
     avg_productive_hours = daily_productivity['usage_hours_productive'].mean()
     avg_productivity_ratio = daily_productivity['productivity_ratio'].mean()
+    
+    # Ensure daily_productivity DataFrame exists
+    if 'daily_productivity' not in locals():
+        # Total usage per day
+        total_daily_usage = screen_df.groupby('date')['usage'].sum().reset_index()
+        total_daily_usage['usage_hours'] = total_daily_usage['usage'] / 3600
+
+        # Productive usage per day
+        productive_daily_usage = screen_df[screen_df['category'] == 'Productive'].groupby('date')['usage'].sum().reset_index()
+        productive_daily_usage['usage_hours'] = productive_daily_usage['usage'] / 3600
+
+        # Merge DataFrames
+        daily_productivity = pd.merge(
+            total_daily_usage[['date', 'usage_hours']],
+            productive_daily_usage[['date', 'usage_hours']],
+            on='date',
+            how='left',
+            suffixes=('_total', '_productive')
+        ).fillna(0)
+
+        # Calculate productivity ratio
+        daily_productivity['productivity_ratio'] = (daily_productivity['usage_hours_productive'] / daily_productivity['usage_hours_total']) * 100
+
+    # Calculate 7-day rolling average for productivity ratio
+    daily_productivity['rolling_productivity_ratio'] = daily_productivity['productivity_ratio'].rolling(window=7, min_periods=1).mean()
+
+    # Plot productivity ratio over time
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.plot(daily_productivity['date'], daily_productivity['productivity_ratio'], label='Daily Productivity Ratio')
+    ax.plot(daily_productivity['date'], daily_productivity['rolling_productivity_ratio'], label='7-Day Rolling Average', linestyle='--')
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Productivity Ratio (%)')
+    ax.set_title('Productivity Ratio Over Time')
+    plt.xticks(rotation=45)
+    ax.legend()
+    st.pyplot(fig)
+
+    # Analyze productivity by day of the week
+    daily_productivity['day_of_week'] = pd.to_datetime(daily_productivity['date']).dt.day_name()
+    productivity_by_day = daily_productivity.groupby('day_of_week')['productivity_ratio'].mean().reindex([
+        'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
+
+    # Plot productivity by day of the week
+    fig2, ax2 = plt.subplots(figsize=(10, 6))
+    ax2.bar(productivity_by_day.index, productivity_by_day.values)
+    ax2.set_xlabel('Day of the Week')
+    ax2.set_ylabel('Average Productivity Ratio (%)')
+    ax2.set_title('Average Productivity by Day of the Week')
+    plt.xticks(rotation=45)
+    st.pyplot(fig2)
+
+    # Display metrics
+    st.subheader('Daily Productivity Metrics')
+    st.write(daily_productivity)
+    
+    st.write(screen_df.head())
 
     st.subheader('Average Productivity')
     st.write(f"Average Daily Productive Hours: {avg_productive_hours:.2f} hours")
@@ -576,9 +692,20 @@ sidebar = st.sidebar
 sidebar.title("HealthKit and Screen Time Data Analyzer")
 sidebar.subheader("Understand your digital habits and health data.")
 
+
 data = setup_data()
 
-page = st.sidebar.radio("Go to", ["Screen Time Analysis", "Heart Rate Analysis", "Sleep Analysis", "Productivity Analysis", "Productivity Metrics", "Additional Insights"])
+page = sidebar.radio("Go to", ["Screen Time Analysis", "Sleep Analysis", "Productivity Metrics", "Productivity Analysis", "Heart Rate Analysis", "Additional Insights"])
+
+sidebar.markdown("""
+---
+Created by **Andreas Ink**
+""")
+
+sidebar.markdown("""  
+[Github](https://github.com/AndreasInk)
+[LinkedIn](https://www.linkedin.com/in/andreas-ink/)              
+""")
 
 if page == "Screen Time Analysis":
     screen_time_analysis(data.screen_df)
@@ -592,5 +719,4 @@ elif page == "Productivity Metrics":
     productivity_metrics(data.screen_df)
 elif page == "Additional Insights":
     additional_insights(data.screen_df, data.audio_exposure_df)
-
 
