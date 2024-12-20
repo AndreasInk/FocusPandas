@@ -1,9 +1,1 @@
 app,usage,start_time,end_time,created_at,tz,device_id,device_model
-com.openai.chat,1200,2024-12-18 09:00:00,2024-12-18 09:20:00,2024-12-18 09:20:00,UTC,device1,iPhone13,3
-com.apple.Safari,1800,2024-12-18 10:00:00,2024-12-18 10:30:00,2024-12-18 10:30:00,UTC,device1,iPhone13,3
-com.apple.finder,900,2024-12-18 11:15:00,2024-12-18 11:30:00,2024-12-18 11:30:00,UTC,device2,MacBookPro16,1
-com.microsoft.VSCode,7200,2024-12-18 12:00:00,2024-12-18 14:00:00,2024-12-18 14:00:00,UTC,device2,MacBookPro16,1
-com.apple.dt.Xcode,5400,2024-12-18 14:30:00,2024-12-18 16:00:00,2024-12-18 16:00:00,UTC,device2,MacBookPro16,1
-com.spotify.client,3600,2024-12-18 17:00:00,2024-12-18 18:00:00,2024-12-18 18:00:00,UTC,device1,iPhone13,3
-com.netflix.Netflix,7200,2024-12-18 20:00:00,2024-12-18 22:00:00,2024-12-18 22:00:00,UTC,device1,iPhone13,3
-com.apple.TextEdit,1800,2024-12-18 22:30:00,2024-12-18 23:00:00,2024-12-18 23:00:00,UTC,device2,MacBookPro16,1
