@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import xml.etree.ElementTree as ET
 from pydantic import BaseModel
 import seaborn as sns
+from categories import categorize_apps
 
 class DataFrames(BaseModel):
     screen_df: pd.DataFrame
@@ -38,78 +39,7 @@ def ensure_all_utc(dfs: list[pd.DataFrame], cols: list[str]):
             except:
                 continue
 
-def categorize_apps(df):
-    """
-    Categorize apps into productivity levels given a screentime dataframe.
-    """
-    # Define app categories
-    app_categories = {
-    'com.microsoft.VSCode': 'Productive',
-    'com.apple.dt.Xcode': 'Productive',
-    'company.thebrowser.Browser': 'Productive',
-    'com.apple.Safari': 'Productive',
-    'com.apple.mail': 'Productive',
-    'com.netflix.Netflix': 'Distracting',
-    'com.spotify.client': 'Neutral',
-    'us.zoom.xos': 'Productive',
-    'com.openai.chat': 'Productive',
-    'com.apple.mobilesafari': 'Productive',
-    'com.lukilabs.lukiapp': 'Productive',
-    'com.apple.MobileSMS': 'Neutral',
-    'com.google.ios.youtube': 'Distracting',
-    'com.hnc.Discord': 'Neutral',
-    'com.burbn.instagram': 'Distracting',
-    'com.apple.mobilenotes': 'Productive',
-    'com.Ai.ScribeGuide': 'Productive',
-    'com.apple.VoiceMemos': 'Productive',
-    'com.hammerandchisel.discord': 'Neutral',
-    'com.figma.Desktop': 'Productive',
-    'com.reddit.Reddit': 'Distracting',
-    'com.linkedin.LinkedIn': 'Productive',
-    'com.apple.Maps': 'Neutral',
-    'com.apple.AppStore': 'Neutral',
-    'com.microsoft.Word': 'Productive',
-    'com.apple.Notes': 'Productive',
-    'com.google.Gmail': 'Productive',
-    'com.google.Docs': 'Productive',
-    'com.apple.weather': 'Neutral',
-    'com.google.calendar': 'Productive',
-    'com.google.Slides': 'Productive',
-    'com.apple.PhotoBooth': 'Neutral',
-    'com.apple.Health': 'Productive',
-    'com.apple.Terminal': 'Productive',
-    'com.apple.Preview': 'Productive',
-    'com.apple.finder': 'Productive',
-    'com.apple.music': 'Productive',
-    'com.apple.calendar': 'Productive',
-    'com.apple.reminders': 'Productive',
-    'com.apple.mobilecal': 'Productive',
-    'com.apple.dictionary': 'Neutral',
-    'com.apple.news': 'Neutral',
-    'com.apple.contacts': 'Neutral',
-    'com.apple.maps': 'Neutral',
-    'com.apple.mobilephone': 'Neutral',
-    'com.apple.calculator': 'Productive',
-    'com.apple.camera': 'Neutral',
-    'com.apple.TextEdit': 'Productive',
-    'com.danielyaakob.studyTool': 'Productive',
-    'com.apple.archiveutility': 'Neutral',
-    'com.apple.SFSymbols-beta': 'Productive',
-    'com.apple.iWork.Numbers': 'Productive',
-    'com.apple.iWork.Pages': 'Productive',
-    'com.apple.iWork.Keynote': 'Productive',
-    'com.nvidia.gfnpc.mall': 'Distracting',
-    'com.Ai.NeuroNote': 'Productive',
-    'com.Ai.PingPath': 'Productive',
-    'com.apple.SystemPreferences': 'Neutral',
-    'com.vinsol.strivepd': 'Productive'
-}
-
-    # Apply categories to the DataFrame
-    df['category'] = df['app'].map(app_categories).fillna('Other')
-    return df
-
-@st.cache_data
+@st.cache_resource
 def setup_data() -> DataFrames:
     """
     Setup the data for analysis.
@@ -121,7 +51,7 @@ def setup_data() -> DataFrames:
     healthkit_export_xml = next((os.path.join(data_dir, file) for file in os.listdir(data_dir) if file.endswith(".xml")), None)
 
     screentime_dfs = [parse_screentime_csv(csv_file) for csv_file in csv_files]
-    screen_df = pd.concat(screentime_dfs, ignore_index=True)
+    screen_df = pd.concat(screentime_dfs, ignore_index=True).drop_duplicates()
     # Parse health data from the XML file
     heart_rate_df = parse_healthkit_export(healthkit_export_xml, 'HKQuantityTypeIdentifierHeartRate')
     sleep_df = parse_healthkit_export(healthkit_export_xml, 'HKCategoryTypeIdentifierSleepAnalysis')
@@ -160,7 +90,7 @@ def setup_data() -> DataFrames:
     screen_grouped = screen_df.groupby('date').agg({'usage': 'sum'}).reset_index()
 
     # Productivity apps list
-    productivity_usage = screen_df[screen_df['category'] == 'Productive'].groupby('date')['usage'].sum().reset_index()
+    productivity_usage = screen_df[screen_df['parent_category'] == 'Productive'].groupby('date')['usage'].sum().reset_index()
     productivity_usage['usage_hours'] = productivity_usage['usage'] / 3600
 
     # Process audio exposure data
@@ -243,11 +173,11 @@ def screen_time_analysis(screen_df):
     st.subheader('Screen Time Data')
 
      # Group by date and category
-    category_usage = screen_df.groupby(['date', 'category'])['usage'].sum().reset_index()
+    category_usage = screen_df.groupby(['date', 'parent_category'])['usage'].sum().reset_index()
     category_usage['usage_hours'] = category_usage['usage'] / 3600
 
     # Pivot the DataFrame for easier plotting
-    category_pivot = category_usage.pivot(index='date', columns='category', values='usage_hours').fillna(0)
+    category_pivot = category_usage.pivot(index='date', columns='parent_category', values='usage_hours').fillna(0)
 
     # Plot stacked bar chart
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -297,11 +227,11 @@ def screen_time_analysis(screen_df):
     st.title('Usage Patterns Over Time')
 
     # Group by hour and category
-    hourly_usage = screen_df.groupby(['hour', 'category'])['usage'].sum().reset_index()
+    hourly_usage = screen_df.groupby(['hour', 'parent_category'])['usage'].sum().reset_index()
     hourly_usage['usage_hours'] = hourly_usage['usage'] / 3600
 
     # Pivot for heatmap
-    heatmap_data = hourly_usage.pivot(index='hour', columns='category', values='usage_hours').fillna(0)
+    heatmap_data = hourly_usage.pivot(index='hour', columns='parent_category', values='usage_hours').fillna(0)
 
     # Plot heatmap
     fig, ax = plt.subplots(figsize=(12, 8))
@@ -524,8 +454,8 @@ def additional_insights(screen_df, audio_exposure_df):
     st.subheader('Productivity vs. Music Loudness')
     productivity_apps = ['com.microsoft.VSCode', 'com.apple.dt.Xcode', 'company.thebrowser.Browser', 'com.openai.chat']
 
-    screen_df['category'] = screen_df['app'].apply(lambda x: 'Productive' if x in productivity_apps else 'Other')
-    productivity_usage = screen_df[screen_df['category'] == 'Productive'].groupby('date')['usage'].sum().reset_index()
+    screen_df['parent_category'] = screen_df['app'].apply(lambda x: 'Productive' if x in productivity_apps else 'Other')
+    productivity_usage = screen_df[screen_df['parent_category'] == 'Productive'].groupby('date')['usage'].sum().reset_index()
     productivity_usage['usage_hours'] = productivity_usage['usage'] / 3600
 
     audio_exposure_df['date'] = audio_exposure_df['startDate'].dt.date
@@ -615,7 +545,7 @@ def productivity_metrics(screen_df):
     total_daily_usage['usage_hours'] = total_daily_usage['usage'] / 3600
 
     # Productive usage per day
-    productive_daily_usage = screen_df[screen_df['category'] == 'Productive'].groupby('date')['usage'].sum().reset_index()
+    productive_daily_usage = screen_df[screen_df['parent_category'] == 'Productive'].groupby('date')['usage'].sum().reset_index()
     productive_daily_usage['usage_hours'] = productive_daily_usage['usage'] / 3600
 
     # Merge DataFrames
@@ -635,7 +565,7 @@ def productivity_metrics(screen_df):
         total_daily_usage['usage_hours'] = total_daily_usage['usage'] / 3600
 
         # Productive usage per day
-        productive_daily_usage = screen_df[screen_df['category'] == 'Productive'].groupby('date')['usage'].sum().reset_index()
+        productive_daily_usage = screen_df[screen_df['parent_category'] == 'Productive'].groupby('date')['usage'].sum().reset_index()
         productive_daily_usage['usage_hours'] = productive_daily_usage['usage'] / 3600
 
         # Merge DataFrames

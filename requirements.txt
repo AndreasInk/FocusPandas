@@ -5,3 +5,4 @@ plotly
 numpy
 xmltodict
 seaborn
+pydantic

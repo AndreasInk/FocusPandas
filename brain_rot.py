@@ -98,7 +98,7 @@ def main():
     """)
 
     # File upload
-    healthkit_file = "./data/hk-export-nov28.xml"
+    healthkit_file = "./data/export.xml"
     screentime_file = "./data/screentime_data_2024-12-19 20:27:29.388001.csv"
 
     if healthkit_file and screentime_file:
