@@ -75,12 +75,12 @@ else:
         print(df.head())
 
         # Save to CSV
-        csv_path = f'./data/screentime_data_{datetime.now()}.csv'
+        csv_path = f'../data/screentime_data_{datetime.now()}.csv'
         df.to_csv(csv_path, index=False)
         print(f"Screen Time data has been exported to {csv_path}")
 
         # Save to JSON
-        json_path = f'./data/screentime_data_{datetime.now()}.json'
+        json_path = f'../data/screentime_data_{datetime.now()}.json'
         df.to_json(json_path, orient='records', lines=True)
         print(f"Screen Time data has been exported to {json_path}")
 
